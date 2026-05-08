@@ -1,0 +1,8 @@
+[project]
+name = "hermes-webui"
+version = "0.1.0"
+description = "Hermes Web UI — a thin HTTP server frontend for the Hermes AI Agent"
+requires-python = ">=3.9"
+dependencies = [
+    "pyyaml>=6.0",
+]

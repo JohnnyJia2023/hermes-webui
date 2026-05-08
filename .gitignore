@@ -25,6 +25,9 @@ AGENTS.md
 .aider*
 copilot-instructions.md
 
+# uv virtual environment
+.venv/
+
 # Generated screenshots and transient artifacts
 screenshot-*.png
 full-UI.png
