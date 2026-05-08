@@ -3,7 +3,7 @@ set -euo pipefail
 
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PORT="${HERMES_WEBUI_PORT:-8787}"
-HOST="${HERMES_WEBUI_HOST:-127.0.0.1}"
+HOST="${HERMES_WEBUI_HOST:-0.0.0.0}"
 URL="http://${HOST}:${PORT}"
 CHROME="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
 
