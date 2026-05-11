@@ -10,6 +10,8 @@ heartbeat without shelling out or adding psutil as a hard dependency.
 from __future__ import annotations
 
 import importlib
+import json
+import os
 from datetime import datetime, timezone
 from typing import Any
 
@@ -21,6 +23,55 @@ def _checked_at() -> str:
 def _gateway_status_module():
     """Load gateway.status lazily so tests and WebUI-only installs stay isolated."""
     return importlib.import_module("gateway.status")
+
+
+def _active_profile_runtime_status() -> dict[str, Any] | None:
+    """Read gateway runtime status from the active WebUI profile, if available."""
+    try:
+        from api.profiles import get_active_hermes_home
+
+        status_path = get_active_hermes_home() / "gateway_state.json"
+        if not status_path.exists():
+            return None
+        payload = json.loads(status_path.read_text(encoding="utf-8"))
+    except Exception:
+        return None
+    return payload if isinstance(payload, dict) else None
+
+
+def _runtime_pid(runtime_status: dict[str, Any] | None) -> int | None:
+    if not isinstance(runtime_status, dict):
+        return None
+    try:
+        pid = int(runtime_status.get("pid") or 0)
+    except (TypeError, ValueError):
+        return None
+    return pid if pid > 0 else None
+
+
+def _pid_is_running(pid: int | None) -> bool:
+    if pid is None:
+        return False
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    except OSError:
+        return False
+    return True
+
+
+def _choose_runtime_status(
+    runtime_status: dict[str, Any] | None,
+    active_runtime_status: dict[str, Any] | None,
+) -> dict[str, Any] | None:
+    """Prefer live active-profile gateway status over stale process-default status."""
+    active_pid = _runtime_pid(active_runtime_status)
+    if _pid_is_running(active_pid):
+        return active_runtime_status
+    return runtime_status
 
 
 def _runtime_detail_subset(runtime_status: dict[str, Any] | None) -> dict[str, Any]:
@@ -92,13 +143,20 @@ def build_agent_health_payload() -> dict[str, Any]:
     except Exception:
         runtime_status = None
 
-    try:
-        running_pid = gateway_status.get_running_pid(cleanup_stale=False)
-    except TypeError:
-        # Older agent versions may not expose cleanup_stale. Keep compatibility.
-        running_pid = gateway_status.get_running_pid()
-    except Exception:
-        running_pid = None
+    runtime_status = _choose_runtime_status(
+        runtime_status,
+        _active_profile_runtime_status(),
+    )
+
+    running_pid = _runtime_pid(runtime_status)
+    if not _pid_is_running(running_pid):
+        try:
+            running_pid = gateway_status.get_running_pid(cleanup_stale=False)
+        except TypeError:
+            # Older agent versions may not expose cleanup_stale. Keep compatibility.
+            running_pid = gateway_status.get_running_pid()
+        except Exception:
+            running_pid = None
 
     safe_details = _runtime_detail_subset(runtime_status)
     if running_pid is not None:

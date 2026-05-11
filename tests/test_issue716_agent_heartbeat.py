@@ -92,6 +92,43 @@ def test_agent_health_payload_down_when_gateway_metadata_exists_but_no_process(m
     assert payload["details"]["gateway_state"] == "stale"
 
 
+def test_agent_health_prefers_live_active_profile_over_stale_root_status(monkeypatch):
+    from api import agent_health
+
+    stale_root = _runtime_status(
+        gateway_state="startup_failed",
+        exit_reason="telegram: stale root token lock",
+    )
+    live_profile = _runtime_status(
+        gateway_state="running",
+        pid=98765,
+        updated_at="2026-05-10T20:12:50+00:00",
+        active_agents=0,
+        platforms={
+            "telegram": {"state": "connected"},
+            "api_server": {"state": "connected"},
+        },
+    )
+
+    monkeypatch.setattr(
+        agent_health,
+        "_gateway_status_module",
+        lambda: _FakeGatewayStatus(stale_root, running_pid=None),
+    )
+    monkeypatch.setattr(agent_health, "_active_profile_runtime_status", lambda: live_profile)
+    monkeypatch.setattr(agent_health, "_pid_is_running", lambda pid: pid == 98765)
+
+    payload = agent_health.build_agent_health_payload()
+
+    assert payload["alive"] is True
+    assert payload["details"]["state"] == "alive"
+    assert payload["details"]["gateway_state"] == "running"
+    assert payload["details"]["updated_at"] == "2026-05-10T20:12:50+00:00"
+    assert payload["details"]["platform_states"] == {"connected": 2}
+    assert "startup_failed" not in repr(payload)
+    assert "stale root token lock" not in repr(payload)
+
+
 def test_agent_health_payload_unknown_when_gateway_is_not_configured(monkeypatch):
     from api import agent_health
 

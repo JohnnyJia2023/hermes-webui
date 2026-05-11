@@ -7,6 +7,7 @@ PID_FILE="${HERMES_WEBUI_PID_FILE:-${HERMES_HOME}/webui.pid}"
 LOG_FILE="${HERMES_WEBUI_LOG_FILE:-${HERMES_HOME}/webui.log}"
 STATE_FILE="${HERMES_WEBUI_CTL_STATE_FILE:-${HERMES_HOME}/webui.ctl.env}"
 DEFAULT_STATE_DIR="${HERMES_WEBUI_STATE_DIR:-${HERMES_HOME}/webui}"
+CTL_BOOTSTRAP_ARGS=()
 
 usage() {
   cat <<'EOF'
@@ -39,7 +40,7 @@ _load_repo_dotenv_preserving_env() {
     key="${key#export }"
     key="${key//[[:space:]]/}"
     [[ "${key}" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]] || continue
-    if [[ -v ${key} ]]; then
+    if [[ ${!key+x} == x ]]; then
       value="${!key}"
       preserved+=("${key}=${value}")
     fi
@@ -57,8 +58,11 @@ _load_repo_dotenv_preserving_env() {
 }
 
 _find_python() {
+  local agent_python="${HERMES_WEBUI_AGENT_DIR:-/Volumes/JHY-DATA-MacStudio/dev/hermes-agent}/venv/bin/python"
   if [[ -n "${HERMES_WEBUI_PYTHON:-}" ]]; then
     printf '%s\n' "${HERMES_WEBUI_PYTHON}"
+  elif [[ -x "${agent_python}" ]]; then
+    printf '%s\n' "${agent_python}"
   elif command -v python3 >/dev/null 2>&1; then
     command -v python3
   elif command -v python >/dev/null 2>&1; then
@@ -215,7 +219,11 @@ start_cmd() {
   : >> "${LOG_FILE}"
   (
     cd "${REPO_ROOT}"
-    exec "${python_exe}" "${REPO_ROOT}/bootstrap.py" --no-browser --foreground --host "${CTL_HOST}" "${CTL_PORT}" "${CTL_BOOTSTRAP_ARGS[@]}"
+    if ((${#CTL_BOOTSTRAP_ARGS[@]})); then
+      exec "${python_exe}" "${REPO_ROOT}/bootstrap.py" --no-browser --foreground --host "${CTL_HOST}" "${CTL_PORT}" "${CTL_BOOTSTRAP_ARGS[@]}"
+    else
+      exec "${python_exe}" "${REPO_ROOT}/bootstrap.py" --no-browser --foreground --host "${CTL_HOST}" "${CTL_PORT}"
+    fi
   ) >> "${LOG_FILE}" 2>&1 &
   pid=$!
 

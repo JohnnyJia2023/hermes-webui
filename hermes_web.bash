@@ -4,6 +4,11 @@ set -euo pipefail
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PORT="${HERMES_WEBUI_PORT:-8787}"
 HOST="${HERMES_WEBUI_HOST:-0.0.0.0}"
+ACTIVE_HERMES_PROFILE="${HERMES_ACTIVE_PROFILE:-deepseek-v4-flash}"
+DEFAULT_HERMES_HOME="${HOME}/.hermes/profiles/${ACTIVE_HERMES_PROFILE}"
+if [ -d "$DEFAULT_HERMES_HOME" ]; then
+    export HERMES_HOME="${HERMES_HOME:-$DEFAULT_HERMES_HOME}"
+fi
 export HERMES_WEBUI_HOST="$HOST"
 export HERMES_WEBUI_PORT="$PORT"
 URL="http://${HOST}:${PORT}"
