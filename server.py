@@ -281,10 +281,30 @@ def main() -> None:
     except Exception as e:
         print(f'[!!] WARNING: Gateway watcher failed to start: {e}', flush=True)
 
-    httpd = QuietHTTPServer((HOST, PORT), Handler)
+    # Import TLS config early so we can choose the correct scheme when
+    # an existing service is already bound to the port.
+    from api.config import TLS_ENABLED, TLS_CERT, TLS_KEY
+    import errno as _errno
+    import webbrowser as _webbrowser
+
+    try:
+        httpd = QuietHTTPServer((HOST, PORT), Handler)
+    except OSError as exc:
+        # If the address is already in use, assume the Web UI is running and
+        # open the page instead of failing with a traceback.
+        if getattr(exc, 'errno', None) == _errno.EADDRINUSE or 'Address already in use' in str(exc):
+            scheme = 'https' if TLS_ENABLED else 'http'
+            url = f"{scheme}://localhost:{PORT}"
+            print(f'[ok] Detected existing Hermes Web UI on {HOST}:{PORT}. Opening {url}', flush=True)
+            try:
+                _webbrowser.open(url)
+            except Exception:
+                # Best-effort only; do not raise on browser open failure.
+                print(f'[!!] Could not open browser automatically. Visit: {url}', flush=True)
+            return
+        raise
 
     # ── TLS/HTTPS setup (optional) ─────────────────────────────────────────
-    from api.config import TLS_ENABLED, TLS_CERT, TLS_KEY
     scheme = 'https' if TLS_ENABLED else 'http'
     if TLS_ENABLED:
         try:

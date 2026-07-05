@@ -2458,6 +2458,15 @@ def get_available_models() -> dict:
         detected_providers = set()
         if active_provider:
             detected_providers.add(active_provider)
+        fallback_cfg = cfg.get("fallback_providers", [])
+        if isinstance(fallback_cfg, list):
+            for entry in fallback_cfg:
+                if not isinstance(entry, dict):
+                    continue
+                provider = _resolve_provider_alias(entry.get("provider"))
+                model = str(entry.get("model") or "").strip()
+                if provider and model:
+                    detected_providers.add(provider)
 
         try:
             _pool = auth_store.get("credential_pool", {}) if isinstance(auth_store, dict) else {}
@@ -2904,6 +2913,15 @@ def get_available_models() -> dict:
             configured_providers = set()
             if active_provider:
                 configured_providers.add(active_provider)
+            fallback_cfg = cfg.get("fallback_providers", [])
+            if isinstance(fallback_cfg, list):
+                for entry in fallback_cfg:
+                    if not isinstance(entry, dict):
+                        continue
+                    provider = _resolve_provider_alias(entry.get("provider"))
+                    model = str(entry.get("model") or "").strip()
+                    if provider and model:
+                        configured_providers.add(provider)
             cfg_providers = cfg.get("providers", {})
             if isinstance(cfg_providers, dict):
                 # Canonicalise here too — same rationale as #1568 detection

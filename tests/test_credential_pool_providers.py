@@ -69,7 +69,7 @@ def _install_fake_hermes_cli(monkeypatch, *, with_load_pool: bool = False, pool_
         monkeypatch.setitem(sys.modules, "agent.credential_pool", fake_cp)
 
 
-def _call_get_available_models(monkeypatch, tmp_path, auth_payload, *, with_load_pool: bool = False):
+def _call_get_available_models(monkeypatch, tmp_path, auth_payload, *, with_load_pool: bool = False, cfg_patch: dict | None = None):
     """Call get_available_models() with auth.json pinned to a temp Hermes home."""
     _install_fake_hermes_cli(
         monkeypatch,
@@ -84,6 +84,8 @@ def _call_get_available_models(monkeypatch, tmp_path, auth_payload, *, with_load
     old_mtime = config._cfg_mtime
     config.cfg.clear()
     config.cfg["model"] = {}
+    if cfg_patch:
+        config.cfg.update(cfg_patch)
     try:
         # Pin mtime to avoid reload_config() clobbering our in-memory cfg patch.
         config._cfg_mtime = config.Path(config._get_config_path()).stat().st_mtime
@@ -258,6 +260,44 @@ def test_load_pool_copilot_ambient_only_remains_hidden(monkeypatch, tmp_path):
         "GitHub Copilot must be hidden when load_pool returns no usable entries; "
         f"got {list(groups)}"
     )
+
+
+def test_fallback_provider_copilot_is_visible_with_ambient_gh_cli(monkeypatch, tmp_path):
+    """Configured Copilot fallbacks should appear even when auth is from gh CLI."""
+    auth_payload = {
+        "version": 1,
+        "providers": {},
+        "active_provider": "deepseek",
+        "credential_pool": {
+            "copilot": [
+                {
+                    "id": "lp001",
+                    "label": "gh auth token",
+                    "source": "gh_cli",
+                    "auth_type": "api_key",
+                    "base_url": "https://api.githubcopilot.com",
+                }
+            ]
+        },
+    }
+    cfg_patch = {
+        "model": {"provider": "deepseek", "default": "deepseek-v4-flash"},
+        "fallback_providers": [
+            {"provider": "copilot", "model": "gpt-5.4-mini"},
+        ],
+    }
+
+    result = _call_get_available_models(
+        monkeypatch,
+        tmp_path,
+        auth_payload,
+        with_load_pool=True,
+        cfg_patch=cfg_patch,
+    )
+    groups = _group_by_provider(result)
+    assert "GitHub Copilot" in groups, f"Expected GitHub Copilot in {list(groups)}"
+    model_ids = [m["id"] for m in groups["GitHub Copilot"]]
+    assert "@copilot:gpt-5.4-mini" in model_ids, model_ids
 
 
 def test_load_pool_copilot_ambient_key_source_only_remains_hidden(monkeypatch, tmp_path):
